@@ -1,16 +1,18 @@
 import pulumi
 import pulumi_oci as oci
-import helper
+from .helper import Helper
 from typing import Optional
+
 
 class Vcn(pulumi.ComponentResource):
     def __init__(self,
                  resource_name: str,
                  compartment_id: pulumi.Input[str],
+                 display_name: pulumi.Input[str],
                  # optional parameters
                  opts: Optional[pulumi.ResourceOptions] = None,
                  cidr_block: Optional[pulumi.Input[str]] = None,
-                 display_name: Optional[pulumi.Input[str]] = None):
+                 ):
         """
         This resource provides a complete VCN infrastructure with all depending resources to runs an OKE cluster
 
@@ -23,17 +25,14 @@ class Vcn(pulumi.ComponentResource):
         """
         super().__init__('OkeCluster', resource_name, None, opts)
 
-        h = helper.Helper()
+        h = Helper()
 
         if cidr_block is None:
             self.cidr_block = "10.0.0.0/16"
         else:
             self.cidr_block = cidr_block
 
-        if display_name is None:
-            self.display_name = h.get_random_word()
-        else:
-            self.display_name = display_name
+        self.display_name = display_name
 
         self.resource_name = resource_name
         self.compartment_id = compartment_id
@@ -41,7 +40,7 @@ class Vcn(pulumi.ComponentResource):
         (self.loadbalancers_subnet_address, self.public_subnet_address,
          self.pods_subnet_address, self.workers_subnet_address,
          self.oke_pods_cidr, self.oke_services_cidr) = h.calculate_subnets(self.cidr_block, 6)
-        
+
         # Create a VCN
         self.vcn = oci.core.Vcn(
             "vcn",

@@ -1,18 +1,26 @@
 import pulumi
-import pulumi_oci as oci
-import helper
-import network
+from .helper import Helper
+from .network import Vcn
+from .oke import Cluster
 from typing import Optional
 
-class Cluster(pulumi.ComponentResource):
-    def __init__(self,
-                 resource_name: str,
-                 compartment_id: pulumi.Input[str],
-                 # optional parameters
-                 opts: Optional[pulumi.ResourceOptions] = None,
-                 oke_image:  Optional[pulumi.Input[str]] = None,
-                 cidr_block: Optional[pulumi.Input[str]] = None,
-                 display_name: Optional[pulumi.Input[str]] = None):
+
+class OkeBlock(pulumi.ComponentResource):
+    def __init__(
+        self,
+        resource_name: str,
+        compartment_id: pulumi.Input[str],
+        kubernetes_version: str,
+        shape: str,
+        min_nodes: pulumi.Input[int],
+        ocpus: pulumi.Input[float],
+        memory_in_gbs: pulumi.Input[float],
+        # optional parameters
+        oke_image: Optional[pulumi.Input[str]] = None,
+        cidr_block: Optional[pulumi.Input[str]] = None,
+        display_name: Optional[pulumi.Input[str]] = None,
+        opts: Optional[pulumi.ResourceOptions] = None,
+    ):
         """
         This resource provides a complete OKE cluster infrastructure with all depending resources
 
@@ -24,8 +32,8 @@ class Cluster(pulumi.ComponentResource):
         :param pulumi.Input[str] oke_image: (Updatable) The [OCID](https://docs.cloud.oracle.com/iaas/Content/General/Concepts/identifiers.htm) of the image to use in the default cluster pool.
         :param pulumi.Input[str] display_name: (Updatable) A user-friendly name. Does not have to be unique, and it's changeable. Avoid entering confidential information.
         """
-        super().__init__('OkeCluster', resource_name, None, opts)
-        h = helper.Helper()
+        super().__init__("OkeCluster", resource_name, None, opts)
+        h = Helper()
 
         if cidr_block is None:
             self.cidr_block = "10.0.0.0/16"
@@ -39,4 +47,24 @@ class Cluster(pulumi.ComponentResource):
 
         self.resource_name = resource_name
         self.compartment_id = compartment_id
+        self.kubernetes_version = kubernetes_version
+        self.shape = shape
+        self.min_nodes = min_nodes
+        self.ocpus = ocpus
+        self.memory_in_gbs = memory_in_gbs
 
+        self.vcn = Vcn(
+            "Vcn", compartment_id=self.compartment_id, display_name=self.display_name
+        )
+
+        self.cluster = Cluster(
+            "Cluster",
+            compartment_id=self.compartment_id,
+            vcn=self.vcn,
+            kubernetes_version=self.kubernetes_version,
+            shape=self.shape,
+            min_nodes=self.min_nodes,
+            ocpus=self.ocpus,
+            memory_in_gbs=self.memory_in_gbs,
+            display_name=self.display_name,
+        )
