@@ -1,5 +1,1 @@
-# Pulumi OCI
-
-This is a simple example package. You can use
-[GitHub-flavored Markdown](https://guides.github.com/features/mastering-markdown/)
-to write your content.
+High-level resources used as building blocks to create complex OCI infrastructures

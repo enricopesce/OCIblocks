@@ -6,3 +6,4 @@ notes.md
 kubeconfig
 Pulumi.dev.yaml
 oci-stack-statefile
+dist
