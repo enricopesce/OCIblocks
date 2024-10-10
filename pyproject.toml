@@ -14,7 +14,6 @@ requires-python = ">=3.8"
 dependencies = [
     "pulumi >=3.122.0",
     "pulumi_oci >=2.0.0",
-    "python >=3.8",
     "random-word >=1.0.11",
 ]
 classifiers = [

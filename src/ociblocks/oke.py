@@ -1,25 +1,27 @@
 import pulumi
 import pulumi_oci as oci
-from .helper import Helper
-from .network import Vcn
+from ociblocks.helper import Helper
+from ociblocks.network import Vcn
 from typing import Optional
 
 
 class Cluster(pulumi.ComponentResource):
-    def __init__(self,
-                 resource_name: str,
-                 compartment_id: pulumi.Input[str],
-                 vcn: Vcn,
-                 kubernetes_version: pulumi.Input[str],
-                 shape: pulumi.Input[str],
-                 min_nodes: pulumi.Input[int],
-                 ocpus: pulumi.Input[float],
-                 memory_in_gbs: pulumi.Input[float],
-                 display_name: pulumi.Input[str],
-                 # optional parameters
-                 ssh_public_key: Optional[pulumi.Input[str]] = None,
-                 opts: Optional[pulumi.ResourceOptions] = None,
-                 image:  Optional[pulumi.Input[str]] = None):
+    def __init__(
+        self,
+        resource_name: str,
+        compartment_id: pulumi.Input[str],
+        vcn: OkeVcn,
+        kubernetes_version: pulumi.Input[str],
+        shape: pulumi.Input[str],
+        min_nodes: pulumi.Input[int],
+        ocpus: pulumi.Input[float],
+        memory_in_gbs: pulumi.Input[float],
+        display_name: pulumi.Input[str],
+        # optional parameters
+        ssh_public_key: Optional[pulumi.Input[str]] = None,
+        opts: Optional[pulumi.ResourceOptions] = None,
+        image: Optional[pulumi.Input[str]] = None,
+    ):
         """
         This resource provides a complete OKE cluster infrastructure with all depending resources
 
@@ -31,7 +33,7 @@ class Cluster(pulumi.ComponentResource):
         :param pulumi.Input[str] oke_image: (Updatable) The [OCID](https://docs.cloud.oracle.com/iaas/Content/General/Concepts/identifiers.htm) of the image to use in the default cluster pool.
         :param pulumi.Input[str] display_name: (Updatable) A user-friendly name. Does not have to be unique, and it's changeable. Avoid entering confidential information.
         """
-        super().__init__('OkeCluster', resource_name, None, opts)
+        super().__init__("OkeCluster", resource_name, None, opts)
         h = Helper()
 
         self.display_name = display_name
@@ -39,7 +41,7 @@ class Cluster(pulumi.ComponentResource):
         self.resource_name = resource_name
         self.compartment_id = compartment_id
         self.kubernetes_version = kubernetes_version
-        
+
         # Create the OKE cluster
         self.cluster = oci.containerengine.Cluster(
             "Cluster",
@@ -62,7 +64,7 @@ class Cluster(pulumi.ComponentResource):
             vcn_id=vcn.id,
             endpoint_config=oci.containerengine.ClusterEndpointConfigArgs(
                 subnet_id=vcn.public_subnet.id, is_public_ip_enabled=True
-            )
+            ),
         )
 
         self.id = self.cluster.id
@@ -74,8 +76,7 @@ class Cluster(pulumi.ComponentResource):
 
             c = test_node_pool_option.sources
             image_id = c.apply(
-                lambda images: h.get_oke_image(
-                    images, shape, kubernetes_version)
+                lambda images: h.get_oke_image(images, shape, kubernetes_version)
             )
         else:
             image_id = image
@@ -94,7 +95,8 @@ class Cluster(pulumi.ComponentResource):
             kubernetes_version=self.kubernetes_version,
             node_config_details=oci.containerengine.NodePoolNodeConfigDetailsArgs(
                 placement_configs=ads.apply(
-                    lambda ads: h.get_ads(ads, vcn.workers_subnet.id)),
+                    lambda ads: h.get_ads(ads, vcn.workers_subnet.id)
+                ),
                 size=min_nodes,
                 node_pool_pod_network_option_details=oci.containerengine.NodePoolNodeConfigDetailsNodePoolPodNetworkOptionDetailsArgs(
                     cni_type="OCI_VCN_IP_NATIVE", pod_subnet_ids=[vcn.pods_subnet.id]
@@ -115,14 +117,12 @@ class Cluster(pulumi.ComponentResource):
 
     def create_kubeconfig(self, filename) -> None:
         cluster_kube_config = self.cluster.id.apply(
-            lambda cid: oci.containerengine.get_cluster_kube_config(
-                cluster_id=cid)
+            lambda cid: oci.containerengine.get_cluster_kube_config(cluster_id=cid)
         )
-        cluster_kube_config.content.apply(
-            lambda cc: open(filename, "w+").write(cc))
+        cluster_kube_config.content.apply(lambda cc: open(filename, "w+").write(cc))
 
 
-class OkeBlock(pulumi.ComponentResource):
+class CreateCluster(pulumi.ComponentResource):
     def __init__(
         self,
         resource_name: str,
@@ -174,7 +174,7 @@ class OkeBlock(pulumi.ComponentResource):
             "Vcn", compartment_id=self.compartment_id, display_name=self.display_name
         )
 
-        self.cluster = Cluster(
+        self.oke = Cluster(
             "Cluster",
             compartment_id=self.compartment_id,
             vcn=self.vcn,
@@ -185,3 +185,9 @@ class OkeBlock(pulumi.ComponentResource):
             memory_in_gbs=self.memory_in_gbs,
             display_name=self.display_name,
         )
+
+    def getVcn(self):
+        return self.vcn
+
+    def getOke(self):
+        return self.oke
