@@ -1,10 +1,7 @@
 import pulumi
 import pulumi_oci as oci
-from ociblocks.helper import Helper
+from core.helper import Helper
 from typing import Optional
-
-
-# creare una vcn che sia di un design completo per ospitare da un oke ad altro piu piccolo ma che contenga le segmentazioni minime per accettare workload complessi e security
 
 
 class Vcn(pulumi.ComponentResource):
@@ -27,7 +24,7 @@ class Vcn(pulumi.ComponentResource):
         :param pulumi.Input[Mapping[str, Any]] defined_tags: (Updatable) Defined tags for this resource. Each key is predefined and scoped to a namespace. For more information, see [Resource Tags](https://docs.cloud.oracle.com/iaas/Content/General/Concepts/resourcetags.htm).  Example: `{"Operations.CostCenter": "42"}`
         :param pulumi.Input[str] display_name: (Updatable) A user-friendly name. Does not have to be unique, and it's changeable. Avoid entering confidential information.
         """
-        super().__init__("OkeCluster", resource_name, None, opts)
+        super().__init__("oci:core:Vcn", resource_name, {}, opts)
 
         h = Helper()
 
@@ -563,150 +560,3 @@ class Vcn(pulumi.ComponentResource):
         )
 
         self.register_outputs({})
-
-
-# class BasicVcn(pulumi.ComponentResource):
-#     def __init__(self,
-#                  resource_name: str,
-#                  compartment_id: pulumi.Input[str],
-#                  display_name: pulumi.Input[str],
-#                  # optional parameters
-#                  opts: Optional[pulumi.ResourceOptions] = None,
-#                  cidr_block: Optional[pulumi.Input[str]] = None,
-#                  ):
-#         """
-#         This resource provides a defined VCN infrastructure with all essential depending resources formed by two subnets: public and private
-
-#         :param str resource_name: The name of the resource
-#         :param pulumi.ResourceOptions opts: Options for the resource.
-#         :param pulumi.Input[str] compartment_id: (Updatable) The [OCID](https://docs.cloud.oracle.com/iaas/Content/General/Concepts/identifiers.htm) of the compartment
-#         :param pulumi.Input[str] cidr_block: Default: `10.0.0.0/16`
-#         :param pulumi.Input[Mapping[str, Any]] defined_tags: (Updatable) Defined tags for this resource. Each key is predefined and scoped to a namespace. For more information, see [Resource Tags](https://docs.cloud.oracle.com/iaas/Content/General/Concepts/resourcetags.htm).  Example: `{"Operations.CostCenter": "42"}`
-#         :param pulumi.Input[str] display_name: (Updatable) A user-friendly name. Does not have to be unique, and it's changeable. Avoid entering confidential information.
-#         """
-#         super().__init__('BasicVcn', resource_name, None, opts)
-
-#         h = Helper()
-
-#         if cidr_block is None:
-#             self.cidr_block = "10.0.0.0/16"
-#         else:
-#             self.cidr_block = cidr_block
-
-#         self.display_name = display_name
-
-#         self.resource_name = resource_name
-#         self.compartment_id = compartment_id
-
-#         self.public_subnet_address, self.private_subnet_address = h.calculate_subnets(self.cidr_block, 2)
-
-#         self.vcn = oci.core.Vcn(
-#             "vcn",
-#             compartment_id=self.compartment_id,
-#             cidr_blocks=[self.cidr_block],
-#             display_name=f"vcn-{self.display_name}",
-#             dns_label="vcn",
-#         )
-
-#         self.id = self.vcn.id
-
-#         self.internet_gateway = oci.core.InternetGateway(
-#             "InternetGateway",
-#             compartment_id=self.compartment_id,
-#             vcn_id=self.vcn.id,
-#             display_name=f"InternetGateway-{self.display_name}",
-#             enabled=True,
-#         )
-
-#         self.nat_gateway = oci.core.NatGateway(
-#             "NatGateway",
-#             compartment_id=self.compartment_id,
-#             vcn_id=self.vcn.id,
-#             display_name=f"NatGateway-{self.display_name}",
-#         )
-
-#         self.service_gateway = oci.core.ServiceGateway(
-#             "ServiceGateway",
-#             compartment_id=self.compartment_id,
-#             vcn_id=self.vcn.id,
-#             services=[
-#                 oci.core.ServiceGatewayServiceArgs(
-#                     service_id=oci.core.get_services().services[0].id
-#                 )
-#             ],
-#             display_name=f"ServiceGateway-{self.display_name}",
-#         )
-
-#         self.public_security_list = oci.core.SecurityList(
-#             "PublicSubnetSecurityList",
-#             compartment_id=self.compartment_id,
-#             vcn_id=self.vcn.id,
-#             display_name=f"PublicSecurityList-{self.display_name}",
-#             ingress_security_rules=[],
-#         )
-
-#         self.workers_security_list = oci.core.SecurityList(
-#             "PrivateSubnetSecurityList",
-#             compartment_id=self.compartment_id,
-#             vcn_id=self.vcn.id,
-#             display_name=f"WorkersSecurityList-{self.display_name}",
-#             ingress_security_rules=[],
-#             egress_security_rules=[],
-#         )
-
-#         self.workers_route_table = oci.core.RouteTable(
-#             "PrivateSubnetRouteTable",
-#             compartment_id=self.compartment_id,
-#             vcn_id=self.vcn.id,
-#             display_name=f"PrivateSubnetRouteTable-{self.display_name}",
-#             route_rules=[
-#                 oci.core.RouteTableRouteRuleArgs(
-#                     destination="0.0.0.0/0",
-#                     network_entity_id=self.nat_gateway.id,
-#                 ),
-#                 oci.core.RouteTableRouteRuleArgs(
-#                     destination=oci.core.get_services().services[0].cidr_block,
-#                     destination_type="SERVICE_CIDR_BLOCK",
-#                     network_entity_id=self.service_gateway.id,
-#                 ),
-#             ],
-#         )
-
-#         self.public_route_table = oci.core.RouteTable(
-#             "PublicSubnetRouteTable",
-#             compartment_id=self.compartment_id,
-#             vcn_id=self.vcn.id,
-#             display_name=f"PublicSubnetRouteTable-{self.display_name}",
-#             route_rules=[
-#                 oci.core.RouteTableRouteRuleArgs(
-#                     destination="0.0.0.0/0",
-#                     network_entity_id=self.internet_gateway.id,
-#                 ),
-#             ],
-#         )
-
-#         self.public_subnet = oci.core.Subnet(
-#             "PublicSubnet",
-#             compartment_id=self.compartment_id,
-#             security_list_ids=[self.public_security_list.id],
-#             vcn_id=self.vcn.id,
-#             cidr_block=self.public_subnet_address,
-#             display_name=f"PublicSubnet-{self.display_name}",
-#             dns_label="public",
-#             prohibit_public_ip_on_vnic=False,
-#             route_table_id=self.public_route_table.id,
-#         )
-
-#         self.workers_subnet = oci.core.Subnet(
-#             "PrivateSubnet",
-#             compartment_id=self.compartment_id,
-#             security_list_ids=[self.workers_security_list.id],
-#             vcn_id=self.vcn.id,
-#             cidr_block=self.private_subnet_address,
-#             display_name=f"PrivateSubnet-{self.display_name}",
-#             dns_label="private",
-#             prohibit_public_ip_on_vnic=True,
-#             route_table_id=self.workers_route_table.id,
-#         )
-
-#         self.register_outputs({})

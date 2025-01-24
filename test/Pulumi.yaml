@@ -1,10 +1,6 @@
 name: okelab
 runtime:
   name: python
-  options:
-    virtualenv: .venv
-    typechecker: pyright
-    toolchain: poetry
 description: A minimal Python Pulumi program
 config:
   pulumi:tags:

@@ -1,5 +1,6 @@
 import pulumi
-import ociblocks
+from blocks.vcn.network import Vcn
+from typing import Dict
 
 config = pulumi.Config()
 compartment_id = config.require("compartment_ocid")
@@ -13,17 +14,33 @@ oke_memory_in_gbs = float(config.require("oke_memory_in_gbs"))
 ssh_key = config.require("ssh_key")
 
 
-#create a complete oke infrastructure
-
-infra = ociblocks.CreateCluster(
-    "okeinfra",
+# Create VCN
+network = Vcn(
+    name="prod",  # Will be used as prefix for all resources
     compartment_id=compartment_id,
-    kubernetes_version="v1.30.1",
-    shape="VM.Standard.A1.Flex",
-    cidr_block=vcn_cidr_block,
-    display_name="infra",
-    memory_in_gbs=oke_memory_in_gbs,
-    min_nodes=oke_min_nodes,
-    ocpus=oke_ocpus,
-    oke_image=node_image_id
+    display_name="production",
+    cidr_block="10.0.0.0/16",
+    opts=pulumi.ResourceOptions(
+        protect=True,  # Prevent accidental deletion
+    )
 )
+
+# Export important values
+pulumi.export("vcn_id", network.id)
+pulumi.export("public_subnet_id", network.public_a_subnet.id)
+pulumi.export("private_subnet_id", network.private_a_subnet.id)
+
+
+# infra = ociblocks.CreateCluster(
+#     "okeinfra",
+#     compartment_id=compartment_id,
+#     kubernetes_version="v1.30.1",
+#     shape="VM.Standard.A1.Flex",
+#     cidr_block=vcn_cidr_block,
+#     display_name="infra",
+#     memory_in_gbs=oke_memory_in_gbs,
+#     min_nodes=oke_min_nodes,
+#     ocpus=oke_ocpus,
+#     oke_image=node_image_id
+# )
+
