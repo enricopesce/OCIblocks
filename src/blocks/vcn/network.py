@@ -16,14 +16,16 @@ class Vcn(pulumi.ComponentResource):
         name: str,
         compartment_id: pulumi.Input[str],
         display_name: pulumi.Input[str],
+        stack_name: str,
         opts: Optional[pulumi.ResourceOptions] = None,
         cidr_block: Optional[pulumi.Input[str]] = None,
     ):
         super().__init__("custom:network:Vcn", name, {}, opts)
         
         self.compartment_id = compartment_id
-        self.display_name = display_name
+        self.display_name = f"{stack_name}-{display_name}"
         self.cidr_block = cidr_block or "10.0.0.0/16"
+        self.stack_name = stack_name
         
         h = Helper()
         subnets = h.calculate_subnets(self.cidr_block, 6)
@@ -41,11 +43,12 @@ class Vcn(pulumi.ComponentResource):
             f"{name}-vcn",
             compartment_id=self.compartment_id,
             cidr_blocks=[self.cidr_block],
-            display_name=f"vcn-{self.display_name}",
-            dns_label="vcn",
+            display_name=self.display_name,
+            dns_label=f"vcn{self.stack_name}",
             freeform_tags={
                 "resource_type": "vcn",
-                "network_tier": "core"
+                "network_tier": "core",
+                "environment": self.stack_name
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
@@ -56,11 +59,12 @@ class Vcn(pulumi.ComponentResource):
             f"{name}-igw",
             compartment_id=self.compartment_id,
             vcn_id=self.vcn.id,
-            display_name=f"igw-{self.display_name}",
+            display_name=f"{self.stack_name}-igw-{self.display_name}",
             enabled=True,
             freeform_tags={
                 "resource_type": "gateway",
-                "gateway_type": "internet"
+                "gateway_type": "internet",
+                "environment": self.stack_name
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
@@ -69,10 +73,11 @@ class Vcn(pulumi.ComponentResource):
             f"{name}-natgw",
             compartment_id=self.compartment_id,
             vcn_id=self.vcn.id,
-            display_name=f"natgw-{self.display_name}",
+            display_name=f"{self.stack_name}-natgw-{self.display_name}",
             freeform_tags={
                 "resource_type": "gateway",
-                "gateway_type": "nat"
+                "gateway_type": "nat",
+                "environment": self.stack_name
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
@@ -86,10 +91,11 @@ class Vcn(pulumi.ComponentResource):
                     service_id=oci.core.get_services().services[0].id
                 )
             ],
-            display_name=f"svcgw-{self.display_name}",
+            display_name=f"{self.stack_name}-svcgw-{self.display_name}",
             freeform_tags={
                 "resource_type": "gateway",
-                "gateway_type": "service"
+                "gateway_type": "service",
+                "environment": self.stack_name
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
@@ -110,13 +116,14 @@ class Vcn(pulumi.ComponentResource):
                     f"{name}-sl-{short_name}",
                     compartment_id=self.compartment_id,
                     vcn_id=self.vcn.id,
-                    display_name=f"sl-{short_name}-{self.display_name}",
+                    display_name=f"{self.stack_name}-sl-{short_name}-{self.display_name}",
                     ingress_security_rules=[],
                     egress_security_rules=[],
                     freeform_tags={
                         "resource_type": "security_list",
                         "network_type": network_type,
-                        "subnet_group": full_name
+                        "subnet_group": full_name,
+                        "environment": self.stack_name
                     },
                     opts=pulumi.ResourceOptions(parent=self)
                 )
@@ -157,12 +164,13 @@ class Vcn(pulumi.ComponentResource):
                     f"{name}-rt-{short_name}",
                     compartment_id=self.compartment_id,
                     vcn_id=self.vcn.id,
-                    display_name=f"rt-{short_name}-{self.display_name}",
+                    display_name=f"{self.stack_name}-rt-{short_name}-{self.display_name}",
                     route_rules=rules,
                     freeform_tags={
                         "resource_type": "route_table",
                         "network_type": network_type,
-                        "subnet_group": full_name
+                        "subnet_group": full_name,
+                        "environment": self.stack_name
                     },
                     opts=pulumi.ResourceOptions(parent=self)
                 )
@@ -184,15 +192,16 @@ class Vcn(pulumi.ComponentResource):
             security_list_ids=[security_list.id],
             vcn_id=self.vcn.id,
             cidr_block=config.cidr,
-            display_name=f"{name}-{self.display_name}",
-            dns_label=config.dns_label,
+            display_name=f"{self.stack_name}-{name}-{self.display_name}",
+            dns_label=f"{config.dns_label}{self.stack_name}",
             prohibit_public_ip_on_vnic=not config.is_public,
             route_table_id=route_table.id,
             freeform_tags={
                 "resource_type": "subnet",
                 "network_type": network_type,
                 "subnet_group": subnet_group,
-                "cidr_range": config.cidr
+                "cidr_range": config.cidr,
+                "environment": self.stack_name
             },
             opts=pulumi.ResourceOptions(parent=self)
         )

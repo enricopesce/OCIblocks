@@ -16,13 +16,10 @@ ssh_key = config.require("ssh_key")
 
 # Create VCN
 network = Vcn(
-    name="prod",  # Will be used as prefix for all resources
+    name="main",  # Required parameter
     compartment_id=compartment_id,
-    display_name="production",
-    cidr_block="10.0.0.0/16",
-    opts=pulumi.ResourceOptions(
-        protect=True,  # Prevent accidental deletion
-    )
+    display_name="core",
+    stack_name=pulumi.get_stack()
 )
 
 # Export important values
