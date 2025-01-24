@@ -11,30 +11,6 @@ class SubnetConfig:
     dns_label: str
 
 class Vcn(pulumi.ComponentResource):
-    vcn: oci.core.Vcn
-    internet_gateway: oci.core.InternetGateway
-    nat_gateway: oci.core.NatGateway
-    service_gateway: oci.core.ServiceGateway
-    id: pulumi.Output[str]
-    
-    # Route tables
-    private_a_route_table: oci.core.RouteTable
-    private_b_route_table: oci.core.RouteTable
-    public_a_route_table: oci.core.RouteTable
-    public_b_route_table: oci.core.RouteTable
-    
-    # Security lists
-    private_a_security_list: oci.core.SecurityList
-    private_b_security_list: oci.core.SecurityList
-    public_a_security_list: oci.core.SecurityList
-    public_b_security_list: oci.core.SecurityList
-    
-    # Subnets
-    private_a_subnet: oci.core.Subnet
-    private_b_subnet: oci.core.Subnet
-    public_a_subnet: oci.core.Subnet
-    public_b_subnet: oci.core.Subnet
-
     def __init__(
         self,
         name: str,
@@ -67,6 +43,10 @@ class Vcn(pulumi.ComponentResource):
             cidr_blocks=[self.cidr_block],
             display_name=f"vcn-{self.display_name}",
             dns_label="vcn",
+            freeform_tags={
+                "resource_type": "vcn",
+                "network_tier": "core"
+            },
             opts=pulumi.ResourceOptions(parent=self)
         )
         self.id = self.vcn.id
@@ -78,6 +58,10 @@ class Vcn(pulumi.ComponentResource):
             vcn_id=self.vcn.id,
             display_name=f"igw-{self.display_name}",
             enabled=True,
+            freeform_tags={
+                "resource_type": "gateway",
+                "gateway_type": "internet"
+            },
             opts=pulumi.ResourceOptions(parent=self)
         )
 
@@ -86,6 +70,10 @@ class Vcn(pulumi.ComponentResource):
             compartment_id=self.compartment_id,
             vcn_id=self.vcn.id,
             display_name=f"natgw-{self.display_name}",
+            freeform_tags={
+                "resource_type": "gateway",
+                "gateway_type": "nat"
+            },
             opts=pulumi.ResourceOptions(parent=self)
         )
 
@@ -99,18 +87,22 @@ class Vcn(pulumi.ComponentResource):
                 )
             ],
             display_name=f"svcgw-{self.display_name}",
+            freeform_tags={
+                "resource_type": "gateway",
+                "gateway_type": "service"
+            },
             opts=pulumi.ResourceOptions(parent=self)
         )
 
     def _create_security_lists(self, name: str) -> None:
         security_lists = {
-            "pub-a": "public-a",
-            "pub-b": "public-b",
-            "prv-a": "private-a",
-            "prv-b": "private-b"
+            "pub-a": ("public-a", "public"),
+            "pub-b": ("public-b", "public"),
+            "prv-a": ("private-a", "private"),
+            "prv-b": ("private-b", "private")
         }
         
-        for short_name, full_name in security_lists.items():
+        for short_name, (full_name, network_type) in security_lists.items():
             setattr(
                 self,
                 f"{full_name.replace('-', '_')}_security_list",
@@ -121,6 +113,11 @@ class Vcn(pulumi.ComponentResource):
                     display_name=f"sl-{short_name}-{self.display_name}",
                     ingress_security_rules=[],
                     egress_security_rules=[],
+                    freeform_tags={
+                        "resource_type": "security_list",
+                        "network_type": network_type,
+                        "subnet_group": full_name
+                    },
                     opts=pulumi.ResourceOptions(parent=self)
                 )
             )
@@ -146,13 +143,13 @@ class Vcn(pulumi.ComponentResource):
         ]
         
         route_tables = {
-            ("prv-a", "private-a"): private_route_rules,
-            ("prv-b", "private-b"): private_route_rules,
-            ("pub-a", "public-a"): public_route_rules,
-            ("pub-b", "public-b"): public_route_rules,
+            ("prv-a", "private-a"): (private_route_rules, "private"),
+            ("prv-b", "private-b"): (private_route_rules, "private"),
+            ("pub-a", "public-a"): (public_route_rules, "public"),
+            ("pub-b", "public-b"): (public_route_rules, "public"),
         }
         
-        for (short_name, full_name), rules in route_tables.items():
+        for (short_name, full_name), (rules, network_type) in route_tables.items():
             setattr(
                 self,
                 f"{full_name.replace('-', '_')}_route_table",
@@ -162,6 +159,11 @@ class Vcn(pulumi.ComponentResource):
                     vcn_id=self.vcn.id,
                     display_name=f"rt-{short_name}-{self.display_name}",
                     route_rules=rules,
+                    freeform_tags={
+                        "resource_type": "route_table",
+                        "network_type": network_type,
+                        "subnet_group": full_name
+                    },
                     opts=pulumi.ResourceOptions(parent=self)
                 )
             )
@@ -173,6 +175,9 @@ class Vcn(pulumi.ComponentResource):
         security_list: oci.core.SecurityList,
         route_table: oci.core.RouteTable,
     ) -> oci.core.Subnet:
+        network_type = "public" if config.is_public else "private"
+        subnet_group = f"{network_type}-{'a' if 'a' in config.dns_label else 'b'}"
+        
         return oci.core.Subnet(
             name,
             compartment_id=self.compartment_id,
@@ -183,6 +188,12 @@ class Vcn(pulumi.ComponentResource):
             dns_label=config.dns_label,
             prohibit_public_ip_on_vnic=not config.is_public,
             route_table_id=route_table.id,
+            freeform_tags={
+                "resource_type": "subnet",
+                "network_type": network_type,
+                "subnet_group": subnet_group,
+                "cidr_range": config.cidr
+            },
             opts=pulumi.ResourceOptions(parent=self)
         )
 
@@ -210,3 +221,12 @@ class Vcn(pulumi.ComponentResource):
                     route_table
                 )
             )
+
+def get_resources_by_tag(vcn_instance, tag_key: str, tag_value: str):
+    resources = []
+    for attr_name in dir(vcn_instance):
+        if hasattr(getattr(vcn_instance, attr_name), 'freeform_tags'):
+            resource = getattr(vcn_instance, attr_name)
+            if resource.freeform_tags.get(tag_key) == tag_value:
+                resources.append(resource)
+    return resources
