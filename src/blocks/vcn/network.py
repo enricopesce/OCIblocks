@@ -1,7 +1,7 @@
 import pulumi
 import pulumi_oci as oci
 from core.helper import Helper
-from typing import Optional, Dict, List
+from typing import Optional
 from dataclasses import dataclass
 
 @dataclass
@@ -15,75 +15,88 @@ class Vcn(pulumi.ComponentResource):
         self,
         name: str,
         compartment_id: pulumi.Input[str],
-        display_name: pulumi.Input[str],
         stack_name: str,
         opts: Optional[pulumi.ResourceOptions] = None,
         cidr_block: Optional[pulumi.Input[str]] = None,
     ):
-        super().__init__("custom:network:Vcn", name, {}, opts)
+        super().__init__("custom:network:Vcn", f"{stack_name}-{name}", {}, opts)
         
         self.compartment_id = compartment_id
-        self.display_name = f"{stack_name}-{display_name}"
+        self.display_name = f"{stack_name}-{name}"
         self.cidr_block = cidr_block or "10.0.0.0/16"
         self.stack_name = stack_name
+        self.name = name
         
         h = Helper()
         subnets = h.calculate_subnets(self.cidr_block, 6)
         
-        self._create_vcn(name)
-        self._create_gateways(name)
-        self._create_security_lists(name)
-        self._create_route_tables(name)
-        self._create_subnets(name, subnets)
+        self._create_vcn()
+        self._create_gateways()
+        self._create_security_lists()
+        self._create_route_tables()
+        self._create_subnets(subnets)
         
         self.register_outputs({})
 
-    def _create_vcn(self, name: str) -> None:
+    def _create_vcn(self) -> None:
+        resource_name = f"{self.stack_name}-{self.name}-vcn"
         self.vcn = oci.core.Vcn(
-            f"{name}-vcn",
+            resource_name,
             compartment_id=self.compartment_id,
             cidr_blocks=[self.cidr_block],
-            display_name=self.display_name,
+            display_name=resource_name,
             dns_label=f"vcn{self.stack_name}",
             freeform_tags={
-                "resource_type": "vcn",
-                "network_tier": "core",
-                "environment": self.stack_name
+                "Name": resource_name,
+                "ResourceType": "vcn",
+                "NetworkTier": "core",
+                "Environment": self.stack_name,
+                "CreatedBy": f"{self.stack_name}-{self.name}"
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
         self.id = self.vcn.id
 
-    def _create_gateways(self, name: str) -> None:
+    def _create_gateways(self) -> None:
+        # Internet Gateway
+        igw_name = f"{self.stack_name}-{self.name}-igw"
         self.internet_gateway = oci.core.InternetGateway(
-            f"{name}-igw",
+            igw_name,
             compartment_id=self.compartment_id,
             vcn_id=self.vcn.id,
-            display_name=f"{self.stack_name}-igw-{self.display_name}",
+            display_name=igw_name,
             enabled=True,
             freeform_tags={
-                "resource_type": "gateway",
-                "gateway_type": "internet",
-                "environment": self.stack_name
+                "Name": igw_name,
+                "ResourceType": "gateway",
+                "GatewayType": "internet",
+                "Environment": self.stack_name,
+                "CreatedBy": f"{self.stack_name}-{self.name}"
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
 
+        # NAT Gateway
+        natgw_name = f"{self.stack_name}-{self.name}-natgw"
         self.nat_gateway = oci.core.NatGateway(
-            f"{name}-natgw",
+            natgw_name,
             compartment_id=self.compartment_id,
             vcn_id=self.vcn.id,
-            display_name=f"{self.stack_name}-natgw-{self.display_name}",
+            display_name=natgw_name,
             freeform_tags={
-                "resource_type": "gateway",
-                "gateway_type": "nat",
-                "environment": self.stack_name
+                "Name": natgw_name,
+                "ResourceType": "gateway",
+                "GatewayType": "nat",
+                "Environment": self.stack_name,
+                "CreatedBy": f"{self.stack_name}-{self.name}"
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
 
+        # Service Gateway
+        svcgw_name = f"{self.stack_name}-{self.name}-svcgw"
         self.service_gateway = oci.core.ServiceGateway(
-            f"{name}-svcgw",
+            svcgw_name,
             compartment_id=self.compartment_id,
             vcn_id=self.vcn.id,
             services=[
@@ -91,16 +104,18 @@ class Vcn(pulumi.ComponentResource):
                     service_id=oci.core.get_services().services[0].id
                 )
             ],
-            display_name=f"{self.stack_name}-svcgw-{self.display_name}",
+            display_name=svcgw_name,
             freeform_tags={
-                "resource_type": "gateway",
-                "gateway_type": "service",
-                "environment": self.stack_name
+                "Name": svcgw_name,
+                "ResourceType": "gateway",
+                "GatewayType": "service",
+                "Environment": self.stack_name,
+                "CreatedBy": f"{self.stack_name}-{self.name}"
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
 
-    def _create_security_lists(self, name: str) -> None:
+    def _create_security_lists(self) -> None:
         security_lists = {
             "pub-a": ("public-a", "public"),
             "pub-b": ("public-b", "public"),
@@ -109,27 +124,30 @@ class Vcn(pulumi.ComponentResource):
         }
         
         for short_name, (full_name, network_type) in security_lists.items():
+            resource_name = f"{self.stack_name}-{self.name}-sl-{short_name}"
             setattr(
                 self,
                 f"{full_name.replace('-', '_')}_security_list",
                 oci.core.SecurityList(
-                    f"{name}-sl-{short_name}",
+                    resource_name,
                     compartment_id=self.compartment_id,
                     vcn_id=self.vcn.id,
-                    display_name=f"{self.stack_name}-sl-{short_name}-{self.display_name}",
+                    display_name=resource_name,
                     ingress_security_rules=[],
                     egress_security_rules=[],
                     freeform_tags={
-                        "resource_type": "security_list",
-                        "network_type": network_type,
-                        "subnet_group": full_name,
-                        "environment": self.stack_name
+                        "Name": resource_name,
+                        "ResourceType": "security-list",
+                        "NetworkType": network_type,
+                        "SubnetGroup": full_name,
+                        "Environment": self.stack_name,
+                        "CreatedBy": f"{self.stack_name}-{self.name}"
                     },
                     opts=pulumi.ResourceOptions(parent=self)
                 )
             )
 
-    def _create_route_tables(self, name: str) -> None:
+    def _create_route_tables(self) -> None:
         private_route_rules = [
             oci.core.RouteTableRouteRuleArgs(
                 destination="0.0.0.0/0",
@@ -157,20 +175,23 @@ class Vcn(pulumi.ComponentResource):
         }
         
         for (short_name, full_name), (rules, network_type) in route_tables.items():
+            resource_name = f"{self.stack_name}-{self.name}-rt-{short_name}"
             setattr(
                 self,
                 f"{full_name.replace('-', '_')}_route_table",
                 oci.core.RouteTable(
-                    f"{name}-rt-{short_name}",
+                    resource_name,
                     compartment_id=self.compartment_id,
                     vcn_id=self.vcn.id,
-                    display_name=f"{self.stack_name}-rt-{short_name}-{self.display_name}",
+                    display_name=resource_name,
                     route_rules=rules,
                     freeform_tags={
-                        "resource_type": "route_table",
-                        "network_type": network_type,
-                        "subnet_group": full_name,
-                        "environment": self.stack_name
+                        "Name": resource_name,
+                        "ResourceType": "route-table",
+                        "NetworkType": network_type,
+                        "SubnetGroup": full_name,
+                        "Environment": self.stack_name,
+                        "CreatedBy": f"{self.stack_name}-{self.name}"
                     },
                     opts=pulumi.ResourceOptions(parent=self)
                 )
@@ -178,7 +199,7 @@ class Vcn(pulumi.ComponentResource):
 
     def _create_subnet(
         self,
-        name: str,
+        subnet_name: str,
         config: SubnetConfig,
         security_list: oci.core.SecurityList,
         route_table: oci.core.RouteTable,
@@ -187,26 +208,28 @@ class Vcn(pulumi.ComponentResource):
         subnet_group = f"{network_type}-{'a' if 'a' in config.dns_label else 'b'}"
         
         return oci.core.Subnet(
-            name,
+            subnet_name,
             compartment_id=self.compartment_id,
             security_list_ids=[security_list.id],
             vcn_id=self.vcn.id,
             cidr_block=config.cidr,
-            display_name=f"{self.stack_name}-{name}-{self.display_name}",
+            display_name=subnet_name,
             dns_label=f"{config.dns_label}{self.stack_name}",
             prohibit_public_ip_on_vnic=not config.is_public,
             route_table_id=route_table.id,
             freeform_tags={
-                "resource_type": "subnet",
-                "network_type": network_type,
-                "subnet_group": subnet_group,
-                "cidr_range": config.cidr,
-                "environment": self.stack_name
+                "Name": subnet_name,
+                "ResourceType": "subnet",
+                "NetworkType": network_type,
+                "SubnetGroup": subnet_group,
+                "CidrRange": config.cidr,
+                "Environment": self.stack_name,
+                "CreatedBy": f"{self.stack_name}-{self.name}"
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
 
-    def _create_subnets(self, name: str, subnet_cidrs: tuple) -> None:
+    def _create_subnets(self, subnet_cidrs: tuple) -> None:
         lb_subnet, pub_subnet, pods_subnet, workers_subnet, _, _ = subnet_cidrs
         
         subnet_configs = {
@@ -220,11 +243,12 @@ class Vcn(pulumi.ComponentResource):
             security_list = getattr(self, f"{attr_name}_security_list")
             route_table = getattr(self, f"{attr_name}_route_table")
             
+            subnet_name = f"{self.stack_name}-{self.name}-sn-{short_name}"
             setattr(
                 self,
                 f"{attr_name}_subnet",
                 self._create_subnet(
-                    f"{name}-sn-{short_name}",
+                    subnet_name,
                     config,
                     security_list,
                     route_table

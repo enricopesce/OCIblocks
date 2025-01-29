@@ -16,9 +16,8 @@ ssh_key = config.require("ssh_key")
 
 # Create VCN
 network = Vcn(
-    name="main",  # Required parameter
+    name="lab",
     compartment_id=compartment_id,
-    display_name="core",
     stack_name=pulumi.get_stack()
 )
 
